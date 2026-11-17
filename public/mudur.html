@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Müdürlük - Çıktı Onay Masası</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <meta name="theme-color" content="#faf9f5">
+</head>
+<body>
+
+  <!-- Toast Alanı -->
+  <div id="toast-container"></div>
+
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon-box" style="background:#f5f3ff; border-color:#ddd6fe;">👔</div>
+      <span>Müdür Onay Portalı</span>
+    </div>
+    <div class="user-badge">
+      <div class="user-pill">
+        <span style="font-size:0.95rem;">🎓</span>
+        <span id="user-name">Müdürlük</span>
+      </div>
+      <button class="btn-logout" onclick="logout()">Çıkış</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <div style="background:#ffffff; border:1.5px solid var(--card-border); border-radius:16px; padding:18px 22px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; box-shadow:var(--shadow-soft);">
+      <div>
+        <h2 style="font-size:1.2rem; font-weight:800; color:#1e293b;" id="kademe-title">Kademe Onay Masası</h2>
+        <p style="font-size:0.86rem; color:#78716c; margin-top:2px;">Öğretmenlerinizin onay bekleyen baskı talepleri</p>
+      </div>
+      <button class="btn btn-sm" onclick="loadPendingRequests()" style="background:#fafaf9; border:1px solid #d6d3d1; color:#44403c; font-weight:700;">
+        🔄 Yenile
+      </button>
+    </div>
+
+    <!-- Bekleyen Talepler Listesi -->
+    <div id="pending-list-container">
+      <p style="text-align:center; color:#94a3b8; padding:30px;">Bekleyen talepler taranıyor...</p>
+    </div>
+
+  </div>
+
+  <script>
+    let currentUser = null;
+    const socket = io();
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerHTML = `<span>${type === 'success' ? '✅' : 'ℹ️'}</span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    async function checkAuth() {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      if (!data.loggedIn || (data.user.role !== 'mudur' && data.user.role !== 'admin')) {
+        window.location.href = '/index.html';
+        return;
+      }
+      currentUser = data.user;
+      document.getElementById('user-name').innerText = currentUser.name;
+      document.getElementById('kademe-title').innerText = `${currentUser.kademe || 'Tüm'} Kademe Onay Masası`;
+
+      socket.emit('join_room', { role: currentUser.role, kademe: currentUser.kademe, userId: currentUser.id });
+      loadPendingRequests();
+    }
+    checkAuth();
+
+    socket.on('new_request_for_approval', (req) => {
+      showToast('Yeni bir baskı talebi geldi!', 'info');
+      loadPendingRequests();
+    });
+
+    async function loadPendingRequests() {
+      const container = document.getElementById('pending-list-container');
+      try {
+        const res = await fetch('/api/requests/pending-approval');
+        const list = await res.json();
+
+        if (!list || list.length === 0) {
+          container.innerHTML = `
+            <div class="card" style="text-align:center; padding:50px 20px;">
+              <div style="font-size:3rem; margin-bottom:10px;">✨</div>
+              <h3 style="font-size:1.2rem; font-weight:800; color:#1e293b;">Bekleyen Talep Yok</h3>
+              <p style="color:#78716c; font-size:0.9rem; margin-top:4px;">Şu an onayınızı bekleyen herhangi bir fotokopi isteği bulunmuyor.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = list.map(item => `
+          <div class="card" style="padding:22px; border-left:5px solid #f59e0b;">
+            <div class="req-header">
+              <div>
+                <div style="font-weight:800; font-size:1.1rem; color:#1e293b;">${item.teacher_name}</div>
+                <div style="font-size:0.82rem; color:#78716c; margin-top:2px;">${item.teacher_email} • ${new Date(item.created_at).toLocaleTimeString('tr-TR')}</div>
+              </div>
+              <span class="badge badge-beklemede">Onay Bekliyor</span>
+            </div>
+
+            <!-- Belge & Özellikler -->
+            <div style="margin:14px 0; padding:14px; background:#fafaf9; border-radius:12px; border:1px solid #eae6df;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                <div style="font-weight:700; font-size:0.98rem; color:#1e293b; display:flex; align-items:center; gap:6px;">
+                  <span>📎</span>
+                  <span>${item.file_original_name}</span>
+                </div>
+                <a href="/api/files/${item.id}" target="_blank" class="btn btn-sm" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; text-decoration:none; font-weight:700;">
+                  👁️ Belgeyi Aç
+                </a>
+              </div>
+
+              <div class="req-details-grid">
+                <span class="req-chip highlight">📄 <b>${item.copy_count}</b> Kopya</span>
+                <span class="req-chip">${item.color_mode === 'SB' ? '⚪⚫ Siyah-Beyaz' : '🎨 Renkli'}</span>
+                <span class="req-chip">${item.duplex_mode === 'Tek' ? 'Tek Yön' : 'Arkalı-Önlü'}</span>
+                <span class="req-chip">Sayfada ${item.pages_per_sheet} Sayfa</span>
+                <span class="req-chip">${item.paper_size}</span>
+              </div>
+
+              ${item.note ? `<div class="req-note-box">💬 <i>Öğretmen Notu: "${item.note}"</i></div>` : ''}
+            </div>
+
+            <!-- Aksiyon Butonları -->
+            <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap:10px; margin-top:14px;">
+              <button onclick="approveRequest(${item.id})" class="btn btn-success">
+                ✅ Onayla (Bilgi İşleme İlet)
+              </button>
+              <button onclick="rejectRequest(${item.id})" class="btn btn-danger">
+                ❌ Reddet
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        container.innerHTML = '<p style="color:red; text-align:center;">Veriler yüklenemedi.</p>';
+      }
+    }
+
+    async function approveRequest(id) {
+      try {
+        const res = await fetch(`/api/requests/${id}/approve`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Talep onaylandı ve Bilgi İşlem kuyruğuna iletildi.', 'success');
+          loadPendingRequests();
+        } else {
+          alert(data.error || 'Hata oluştu.');
+        }
+      } catch (err) {
+        alert('Bağlantı hatası!');
+      }
+    }
+
+    async function rejectRequest(id) {
+      const reason = prompt('Reddetme gerekçesini yazınız (Öğretmene iletilecektir):', 'Baskı kotası veya içerik uygunluğu nedeniyle onaylanmadı.');
+      if (reason === null) return;
+
+      try {
+        const res = await fetch(`/api/requests/${id}/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+        if (res.ok) {
+          showToast('Talep reddedildi.', 'info');
+          loadPendingRequests();
+        }
+      } catch (err) {
+        alert('Bağlantı hatası!');
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/index.html';
+    }
+  </script>
+</body>
+</html>

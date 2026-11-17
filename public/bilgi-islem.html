@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bilgi İşlem - Baskı & Hesap Masası</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <meta name="theme-color" content="#faf9f5">
+</head>
+<body>
+
+  <div id="toast-container"></div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon-box" style="background:#eff6ff; border-color:#bfdbfe;">💻</div>
+      <span>Bilgi İşlem Kontrol Masası</span>
+    </div>
+    <div class="user-badge">
+      <div class="user-pill" style="background:var(--pastel-green-bg); border-color:var(--pastel-green-border); color:var(--pastel-green-text);">
+        <span style="font-size:0.8rem;">●</span>
+        <span>Canlı Dinleme Devrede</span>
+      </div>
+      <button class="btn-logout" onclick="logout()">Çıkış</button>
+    </div>
+  </header>
+
+  <div class="container-wide">
+
+    <!-- Ana Sekmeler (Baskı Kuyruğu & Kullanıcı Yönetimi) -->
+    <div class="tabs-pill" style="margin-bottom:20px; max-width:500px;">
+      <button class="tab-pill-btn active" id="tab-queue" onclick="switchMainTab('queue')">
+        🖨️ Baskı Kuyruğu (Canlı)
+      </button>
+      <button class="tab-pill-btn" id="tab-users" onclick="switchMainTab('users')">
+        👥 Kullanıcı & Hesap Yönetimi
+      </button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 1. BÖLÜM: BASKI KUYRUĞU                    -->
+    <!-- ========================================== -->
+    <div id="view-queue">
+      
+      <!-- Canlı Kuyruk Banner & Zil Testi -->
+      <div style="background:#ffffff; border:1.5px solid var(--card-border); border-radius:18px; padding:20px 24px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; box-shadow:var(--shadow-soft);">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div style="width:50px; height:50px; background:#fff8e1; border:1px solid #fde8b3; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">
+            🔔
+          </div>
+          <div>
+            <div style="font-weight:800; font-size:1.15rem; color:#1e293b;">Baskı Bildirim Servisi Aktif</div>
+            <div style="font-size:0.88rem; color:#78716c; margin-top:2px;">Müdür onayladığı an sesli uyarı verilir ve çıktı listenize otomatik eklenir.</div>
+          </div>
+        </div>
+        <div>
+          <button id="btn-audio-test" onclick="playChime()" class="btn btn-sm" style="background:#f0fdf4; border:1.5px solid #bbf7d0; color:#15803d; font-weight:700; padding:10px 18px; border-radius:12px;">
+            🔊 Zil Sesini Dene (Ding-Dong)
+          </button>
+        </div>
+      </div>
+
+      <!-- İstatistik Kartları -->
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:22px;">
+        <div class="card" style="padding:18px 20px; margin-bottom:0; border-top:4px solid #3b82f6;">
+          <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em;">YAZDIRILACAK İŞLER</div>
+          <div style="font-size:2.3rem; font-weight:800; color:#1d4ed8; margin-top:2px;" id="stat-pending">0</div>
+          <div style="font-size:0.78rem; color:#78716c;">Sıradaki bekleyen talep sayısı</div>
+        </div>
+
+        <div class="card" style="padding:18px 20px; margin-bottom:0; border-top:4px solid #f59e0b;">
+          <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em;">TOPLAM BASILACAK KOPYA</div>
+          <div style="font-size:2.3rem; font-weight:800; color:#d97706; margin-top:2px;" id="stat-copies">0</div>
+          <div style="font-size:0.78rem; color:#78716c;">Bekleyen toplam kağıt/kopya adedi</div>
+        </div>
+
+        <div class="card" style="padding:18px 20px; margin-bottom:0; border-top:4px solid #10b981;">
+          <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em;">TAMAMLANAN TALEPLER</div>
+          <div style="font-size:2.3rem; font-weight:800; color:#15803d; margin-top:2px;" id="stat-completed">0</div>
+          <div style="font-size:0.78rem; color:#78716c;">Yazdırılıp öğretmene teslim edilenler</div>
+        </div>
+      </div>
+
+      <!-- Baskı Kuyruğu -->
+      <div class="card" style="padding:24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+          <div>
+            <h2 class="card-title" style="margin-bottom:2px;">🖨️ Onaylı Baskı Kuyruğu</h2>
+            <p style="font-size:0.88rem; color:#78716c;">Müdür onayından geçip basılmak üzere hazırlanan işler</p>
+          </div>
+          <button onclick="loadQueue()" class="btn btn-sm" style="background:#fafaf9; border:1px solid #d6d3d1; color:#44403c; font-weight:700;">
+            🔄 Listeyi Yenile
+          </button>
+        </div>
+
+        <div id="queue-container">
+          <p style="text-align:center; color:#94a3b8; padding:30px;">Kuyruk taranıyor...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 2. BÖLÜM: KULLANICI & HESAP YÖNETİMİ       -->
+    <!-- ========================================== -->
+    <div id="view-users" style="display:none;">
+      
+      <!-- Yeni Kullanıcı Ekleme Kartı -->
+      <div class="card" style="padding:24px; margin-bottom:20px;">
+        <h2 class="card-title">➕ Yeni Kullanıcı / Öğretmen Ekle</h2>
+        <p class="card-subtitle">Öğretmen veya müdürler için kurumsal e-posta ile yeni hesap tanımlayın.</p>
+
+        <form id="new-user-form" onsubmit="addUser(event)">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label"><span>Ad Soyad *</span></label>
+              <input type="text" id="new-user-name" class="form-control" placeholder="Örn: Ayşe Yılmaz" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label"><span>Kurumsal E-Posta *</span></label>
+              <input type="email" id="new-user-email" class="form-control" placeholder="ayse.yilmaz@okuladi.k12.tr" required>
+            </div>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label"><span>Başlangıç Şifresi *</span></label>
+              <input type="text" id="new-user-pass" class="form-control" value="Okul2026" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label"><span>Rol *</span></label>
+              <select id="new-user-role" class="form-select" onchange="toggleKademeField(this.value)">
+                <option value="ogretmen">Öğretmen</option>
+                <option value="mudur">Kademe Müdürü / Yrd.</option>
+                <option value="bilgi_islem">Bilgi İşlem Yetkilisi</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" id="group-kademe">
+            <label class="form-label"><span>Bağlı Olduğu Kademe</span></label>
+            <select id="new-user-kademe" class="form-select">
+              <option value="Lise">Lise</option>
+              <option value="Ortaokul">Ortaokul</option>
+              <option value="İlkokul">İlkokul</option>
+              <option value="Anaokulu">Anaokulu</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="max-width:240px; margin-top:8px;">
+            💾 Kullanıcıyı Kaydet
+          </button>
+        </form>
+      </div>
+
+      <!-- Kullanıcı Listesi Kartı -->
+      <div class="card" style="padding:24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+          <div>
+            <h2 class="card-title" style="margin-bottom:2px;">👥 Kayıtlı Kullanıcılar</h2>
+            <p style="font-size:0.88rem; color:#78716c;" id="user-count-label">Yükleniyor...</p>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <input type="text" id="user-search" oninput="filterUsers()" class="form-control" placeholder="İsim veya e-posta ile ara..." style="width:260px; padding:9px 13px;">
+            <button onclick="loadUsers()" class="btn btn-sm" style="background:#fafaf9; border:1px solid #d6d3d1; color:#44403c; font-weight:700;">
+              🔄 Yenile
+            </button>
+          </div>
+        </div>
+
+        <div id="users-table-container">
+          <p style="text-align:center; color:#94a3b8; padding:30px;">Kullanıcı listesi yükleniyor...</p>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    let currentUser = null;
+    let allUsersList = [];
+    const socket = io();
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerHTML = `<span style="font-size:1.3rem;">🔔</span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Web Audio Ding-Dong
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playChime() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const now = audioCtx.currentTime;
+
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.35, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.6);
+
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(587.33, now + 0.18);
+      gain2.gain.setValueAtTime(0.45, now + 0.18);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now + 0.18);
+      osc2.stop(now + 1.1);
+    }
+
+    async function checkAuth() {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      if (!data.loggedIn || (data.user.role !== 'bilgi_islem' && data.user.role !== 'admin')) {
+        window.location.href = '/index.html';
+        return;
+      }
+      currentUser = data.user;
+      socket.emit('join_room', { role: currentUser.role, userId: currentUser.id });
+      loadQueue();
+    }
+    checkAuth();
+
+    function switchMainTab(tab) {
+      if (tab === 'queue') {
+        document.getElementById('view-queue').style.display = 'block';
+        document.getElementById('view-users').style.display = 'none';
+        document.getElementById('tab-queue').classList.add('active');
+        document.getElementById('tab-users').classList.remove('active');
+        loadQueue();
+      } else {
+        document.getElementById('view-queue').style.display = 'none';
+        document.getElementById('view-users').style.display = 'block';
+        document.getElementById('tab-queue').classList.remove('active');
+        document.getElementById('tab-users').classList.add('active');
+        loadUsers();
+      }
+    }
+
+    // --- BASKI KUYRUĞU İŞLEMLERİ ---
+    socket.on('request_approved_for_print', (data) => {
+      playChime();
+      showToast(`Yeni onay: ${data.teacher_name} (${data.copy_count} Kopya)`);
+      loadQueue();
+    });
+
+    socket.on('request_completed_updated', () => {
+      loadQueue();
+    });
+
+    async function loadQueue() {
+      const container = document.getElementById('queue-container');
+      try {
+        const res = await fetch('/api/requests/print-queue');
+        const list = await res.json();
+
+        if (!list || list.length === 0) {
+          container.innerHTML = `
+            <div style="text-align:center; padding:50px 20px; color:#78716c;">
+              <div style="font-size:3rem; margin-bottom:10px;">☕</div>
+              <h3 style="font-size:1.2rem; font-weight:800; color:#1e293b;">Baskı Kuyruğu Boş</h3>
+              <p style="font-size:0.9rem; margin-top:4px;">Şu anda sırada bekleyen herhangi bir onaylı çıktı işi bulunmuyor.</p>
+            </div>
+          `;
+          updateStats(0, 0, 0);
+          return;
+        }
+
+        let pendingCount = 0;
+        let pendingCopies = 0;
+        let completedCount = 0;
+
+        container.innerHTML = list.map(item => {
+          const isPending = item.status === 'onaylandi';
+          if (isPending) {
+            pendingCount++;
+            pendingCopies += (item.copy_count || 1);
+          } else {
+            completedCount++;
+          }
+
+          return `
+            <div class="req-card" style="border-left: 5px solid ${isPending ? '#3b82f6' : '#10b981'}; background: ${isPending ? '#ffffff' : '#fafaf9'}; opacity: ${isPending ? '1' : '0.85'};">
+              <div class="req-header">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-weight:800; font-size:1.15rem; color:#1e293b;">${item.teacher_name}</span>
+                    <span class="req-chip" style="font-size:0.78rem; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">🏢 ${item.kademe}</span>
+                  </div>
+                  <div style="font-size:0.82rem; color:#78716c; margin-top:2px;">
+                    Onaylayan: <b>${item.approved_by || 'Müdürlük'}</b> • Onay Saati: ${item.approved_at ? new Date(item.approved_at).toLocaleTimeString('tr-TR') : '-'}
+                  </div>
+                </div>
+                ${isPending ? '<span class="badge badge-onaylandi" style="font-size:0.82rem; padding:6px 12px;">🖨️ Yazdırılacak</span>' : '<span class="badge badge-tamamlandi">✅ Hazır / Verildi</span>'}
+              </div>
+
+              <div style="margin:12px 0; padding:14px; background:#fafaf9; border-radius:12px; border:1px solid #eae6df; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                <div>
+                  <div style="font-weight:800; font-size:1.05rem; color:#1e293b; display:flex; align-items:center; gap:6px;">
+                    <span>📄</span>
+                    <span>${item.file_original_name}</span>
+                  </div>
+                  <div class="req-details-grid" style="margin-top:8px;">
+                    <span class="req-chip highlight" style="font-size:0.92rem; padding:6px 12px; background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">
+                      🔢 <b>${item.copy_count} KOPYA</b>
+                    </span>
+                    <span class="req-chip">${item.color_mode === 'SB' ? '⚪⚫ Siyah-Beyaz' : '🎨 Renkli'}</span>
+                    <span class="req-chip">${item.duplex_mode === 'Tek' ? 'Tek Yön' : 'Arkalı-Önlü'}</span>
+                    <span class="req-chip">Sayfada ${item.pages_per_sheet} Sayfa</span>
+                    <span class="req-chip">${item.paper_size}</span>
+                  </div>
+                  ${item.note ? `<div class="req-note-box" style="margin-top:8px;">⚠️ Öğretmen Notu: "${item.note}"</div>` : ''}
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:8px; min-width:210px;">
+                  <a href="/api/files/${item.id}" target="_blank" class="btn btn-sm btn-primary" style="padding:10px 16px; font-weight:700; text-decoration:none;">
+                    📥 Belgeyi Aç / Yazdır
+                  </a>
+                  ${isPending ? `
+                    <button onclick="completePrint(${item.id})" class="btn btn-sm btn-success" style="padding:10px 16px; font-weight:700;">
+                      ✅ Yazdırıldı (Öğretmene Bildir)
+                    </button>
+                  ` : `
+                    <div style="text-align:center; font-size:0.85rem; color:#15803d; font-weight:700; padding:6px;">
+                      ✓ Hazırlandı
+                    </div>
+                  `}
+                </div>
+              </div>
+
+              <div style="font-size:0.78rem; color:#78716c; display:flex; justify-content:space-between;">
+                <span>Talep Saati: ${new Date(item.created_at).toLocaleString('tr-TR')}</span>
+                ${item.completed_at ? `<span>Tamamlanma: ${new Date(item.completed_at).toLocaleTimeString('tr-TR')}</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        updateStats(pendingCount, pendingCopies, completedCount);
+      } catch (err) {
+        container.innerHTML = '<p style="color:red; text-align:center;">Veriler yüklenemedi.</p>';
+      }
+    }
+
+    function updateStats(pending, copies, completed) {
+      document.getElementById('stat-pending').innerText = pending;
+      document.getElementById('stat-copies').innerText = copies;
+      document.getElementById('stat-completed').innerText = completed;
+    }
+
+    async function completePrint(id) {
+      try {
+        const res = await fetch(`/api/requests/${id}/complete`, { method: 'POST' });
+        if (res.ok) loadQueue();
+      } catch (err) {
+        alert('İşlem tamamlanamadı.');
+      }
+    }
+
+    // --- KULLANICI YÖNETİMİ İŞLEMLERİ ---
+
+    function toggleKademeField(role) {
+      const group = document.getElementById('group-kademe');
+      if (role === 'bilgi_islem') {
+        group.style.display = 'none';
+      } else {
+        group.style.display = 'block';
+      }
+    }
+
+    async function loadUsers() {
+      const container = document.getElementById('users-table-container');
+      try {
+        const res = await fetch('/api/admin/users');
+        allUsersList = await res.json();
+        document.getElementById('user-count-label').innerText = `Toplam ${allUsersList.length} kayıtlı kullanıcı`;
+        renderUsers(allUsersList);
+      } catch (err) {
+        container.innerHTML = '<p style="color:red; text-align:center;">Kullanıcılar yüklenemedi.</p>';
+      }
+    }
+
+    function renderUsers(list) {
+      const container = document.getElementById('users-table-container');
+      if (!list || list.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#78716c; padding:20px;">Kullanıcı bulunamadı.</p>';
+        return;
+      }
+
+      container.innerHTML = `
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.9rem;">
+            <thead>
+              <tr style="border-bottom:2px solid #eae6df; color:#64748b; font-size:0.8rem; text-transform:uppercase;">
+                <th style="padding:10px 12px;">Ad Soyad</th>
+                <th style="padding:10px 12px;">E-Posta</th>
+                <th style="padding:10px 12px;">Rol</th>
+                <th style="padding:10px 12px;">Kademe</th>
+                <th style="padding:10px 12px; text-align:right;">İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(u => {
+                let roleBadge = '';
+                if (u.role === 'ogretmen') roleBadge = '<span class="badge" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;">Öğretmen</span>';
+                else if (u.role === 'mudur') roleBadge = '<span class="badge" style="background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe;">Müdürlük</span>';
+                else if (u.role === 'bilgi_islem') roleBadge = '<span class="badge" style="background:#fff8e1; color:#92400e; border:1px solid #fde8b3;">Bilgi İşlem</span>';
+
+                return `
+                  <tr style="border-bottom:1px solid #f1f0ea;">
+                    <td style="padding:12px; font-weight:700; color:#1e293b;">${u.name}</td>
+                    <td style="padding:12px; color:#475569;">${u.email}</td>
+                    <td style="padding:12px;">${roleBadge}</td>
+                    <td style="padding:12px; font-weight:600; color:#64748b;">${u.kademe || '-'}</td>
+                    <td style="padding:12px; text-align:right;">
+                      <button onclick="resetPassword(${u.id}, '${u.name}')" class="btn-sm" style="background:#fafaf9; border:1px solid #d6d3d1; color:#1e293b; margin-right:6px; cursor:pointer;">
+                        🔑 Şifre
+                      </button>
+                      ${u.id !== currentUser.id ? `
+                        <button onclick="deleteUser(${u.id}, '${u.name}')" class="btn-sm btn-danger" style="cursor:pointer;">
+                          🗑️
+                        </button>
+                      ` : ''}
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function filterUsers() {
+      const q = document.getElementById('user-search').value.toLowerCase();
+      const filtered = allUsersList.filter(u => 
+        u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      );
+      renderUsers(filtered);
+    }
+
+    async function addUser(e) {
+      e.preventDefault();
+      const name = document.getElementById('new-user-name').value;
+      const email = document.getElementById('new-user-email').value;
+      const password = document.getElementById('new-user-pass').value;
+      const role = document.getElementById('new-user-role').value;
+      const kademe = role === 'bilgi_islem' ? null : document.getElementById('new-user-kademe').value;
+
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password, role, kademe })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(data.message);
+          document.getElementById('new-user-form').reset();
+          document.getElementById('new-user-pass').value = 'Okul2026';
+          loadUsers();
+        } else {
+          alert(data.error || 'Hata oluştu.');
+        }
+      } catch (err) {
+        alert('Bağlantı hatası!');
+      }
+    }
+
+    async function resetPassword(id, name) {
+      const newPass = prompt(`"${name}" için yeni şifre belirleyin:`, 'Okul2026');
+      if (!newPass) return;
+
+      try {
+        const res = await fetch(`/api/admin/users/${id}/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: newPass })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`"${name}" kullanıcısının şifresi güncellendi: ${newPass}`);
+        } else {
+          alert(data.error || 'Şifre güncellenemedi.');
+        }
+      } catch (err) {
+        alert('Bağlantı hatası!');
+      }
+    }
+
+    async function deleteUser(id, name) {
+      if (!confirm(`"${name}" kullanıcısını silmek istediğinize emin misiniz?`)) return;
+      try {
+        const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(data.message);
+          loadUsers();
+        } else {
+          alert(data.error || 'Silinemedi.');
+        }
+      } catch (err) {
+        alert('Bağlantı hatası!');
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/index.html';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Öğretmen - Çıktı Talebi</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <meta name="theme-color" content="#faf9f5">
+</head>
+<body>
+
+  <!-- Toast Bildirim Alanı -->
+  <div id="toast-container"></div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon-box">🖨️</div>
+      <span>Okul Baskı Portalı</span>
+    </div>
+    <div class="user-badge">
+      <div class="user-pill">
+        <span style="font-size:0.9rem;">👩‍🏫</span>
+        <span id="user-name">Öğretmen</span>
+      </div>
+      <button class="btn-logout" onclick="logout()">Çıkış</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Segmented Sekmeler -->
+    <div class="tabs-pill">
+      <button class="tab-pill-btn active" id="tab-new" onclick="switchTab('new')">
+        ➕ Yeni Baskı Talebi
+      </button>
+      <button class="tab-pill-btn" id="tab-list" onclick="switchTab('list')">
+        📋 Taleplerim
+      </button>
+    </div>
+
+    <!-- 1. YENİ TALEP OLUŞTURMA BÖLÜMÜ -->
+    <div id="view-new">
+      <div class="card">
+        <h2 class="card-title">Yeni Fotokopi & Baskı İsteği</h2>
+        <p class="card-subtitle">Dosyanızı ve baskı tercihlerini belirleyip ilgili müdürlüğün onayına iletin.</p>
+
+        <form id="print-form">
+          
+          <!-- Kademe Seçimi (Pastel Renkli Dokunmatik Kartlar) -->
+          <div class="form-group">
+            <label class="form-label">
+              <span>Hangi Kademe Müdürlüğü Onaylayacak? *</span>
+            </label>
+            <div class="kademe-cards">
+              <div class="kademe-card-btn active" data-kademe="Lise" onclick="selectKademe('Lise', this)">
+                <div class="kademe-icon" style="background:#eff6ff;">🎓</div>
+                <div>
+                  <div class="kademe-title">Lise Müd.</div>
+                  <div style="font-size:0.75rem; color:#64748b;">9-12. Sınıflar</div>
+                </div>
+              </div>
+              <div class="kademe-card-btn" data-kademe="Ortaokul" onclick="selectKademe('Ortaokul', this)">
+                <div class="kademe-icon" style="background:#f0fdf4;">📚</div>
+                <div>
+                  <div class="kademe-title">Ortaokul Müd.</div>
+                  <div style="font-size:0.75rem; color:#64748b;">5-8. Sınıflar</div>
+                </div>
+              </div>
+              <div class="kademe-card-btn" data-kademe="İlkokul" onclick="selectKademe('İlkokul', this)">
+                <div class="kademe-icon" style="background:#fefce8;">✏️</div>
+                <div>
+                  <div class="kademe-title">İlkokul Müd.</div>
+                  <div style="font-size:0.75rem; color:#64748b;">1-4. Sınıflar</div>
+                </div>
+              </div>
+              <div class="kademe-card-btn" data-kademe="Anaokulu" onclick="selectKademe('Anaokulu', this)">
+                <div class="kademe-icon" style="background:#fff1f2;">🎨</div>
+                <div>
+                  <div class="kademe-title">Anaokulu Müd.</div>
+                  <div style="font-size:0.75rem; color:#64748b;">Okul Öncesi</div>
+                </div>
+              </div>
+            </div>
+            <input type="hidden" id="kademe" value="Lise" required>
+          </div>
+
+          <!-- Dosya Yükleme Dropzone -->
+          <div class="form-group">
+            <label class="form-label">
+              <span>Yazdırılacak Dosya *</span>
+              <span class="form-label-hint">PDF, Word, Excel, Resim</span>
+            </label>
+            
+            <div class="file-dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+              <div class="file-dropzone-icon">📎</div>
+              <div class="file-dropzone-text">Dosya seçmek için dokunun</div>
+              <div class="file-dropzone-sub">Telefonunuzdaki veya bilgisayarınızdaki belgeleri ekleyin</div>
+              <input type="file" id="file-input" style="display:none;" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" required>
+            </div>
+
+            <div class="file-preview" id="file-preview">
+              <div style="display:flex; align-items:center; gap:12px; overflow:hidden;">
+                <span style="font-size:1.6rem;">📄</span>
+                <div style="overflow:hidden;">
+                  <div style="font-weight:700; font-size:0.92rem; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;" id="file-name-preview">dosya.pdf</div>
+                  <div style="font-size:0.78rem; color:#64748b;" id="file-size-preview">0 KB</div>
+                </div>
+              </div>
+              <button type="button" onclick="removeFile(event)" class="btn-sm btn-danger" style="padding:5px 10px; font-size:0.78rem;">Değiştir</button>
+            </div>
+          </div>
+
+          <!-- Kopya Adedi & Kağıt Boyutu -->
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">
+                <span>Kopya Adedi *</span>
+              </label>
+              <input type="number" id="copy_count" class="form-control" value="25" min="1" max="1000" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">
+                <span>Kağıt Boyutu</span>
+              </label>
+              <select id="paper_size" class="form-select">
+                <option value="A4">A4 (Standart)</option>
+                <option value="A3">A3 (Büyük Boy)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Sayfa Başına Sayfa (Segmented Control) -->
+          <div class="form-group">
+            <label class="form-label">
+              <span>Sayfa Düzeni (Sayfada Kaç Sayfa Olsun?)</span>
+            </label>
+            <div class="segmented-group">
+              <button type="button" class="segmented-btn active" onclick="selectSegment('pages_per_sheet', '1', this)">
+                <span style="font-size:1.15rem;">📄</span>
+                <span>1 Sayfa (Normal)</span>
+              </button>
+              <button type="button" class="segmented-btn" onclick="selectSegment('pages_per_sheet', '2', this)">
+                <span style="font-size:1.15rem;">📑</span>
+                <span>Yan Yana 2 Sayfa</span>
+              </button>
+              <button type="button" class="segmented-btn" onclick="selectSegment('pages_per_sheet', '4', this)">
+                <span style="font-size:1.15rem;">▦</span>
+                <span>4 Sayfa (Tasarruf)</span>
+              </button>
+            </div>
+            <input type="hidden" id="pages_per_sheet" value="1">
+          </div>
+
+          <!-- Renk & Baskı Yönü -->
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label"><span>Renk Tercihi</span></label>
+              <div class="segmented-group">
+                <button type="button" class="segmented-btn active" onclick="selectSegment('color_mode', 'SB', this)">
+                  <span>⚪⚫ Siyah-Beyaz</span>
+                </button>
+                <button type="button" class="segmented-btn" onclick="selectSegment('color_mode', 'Renkli', this)">
+                  <span>🎨 Renkli</span>
+                </button>
+              </div>
+              <input type="hidden" id="color_mode" value="SB">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label"><span>Baskı Yönü</span></label>
+              <div class="segmented-group">
+                <button type="button" class="segmented-btn active" onclick="selectSegment('duplex_mode', 'Tek', this)">
+                  <span>Tek Yön</span>
+                </button>
+                <button type="button" class="segmented-btn" onclick="selectSegment('duplex_mode', 'Cift', this)">
+                  <span>Arkalı-Önlü</span>
+                </button>
+              </div>
+              <input type="hidden" id="duplex_mode" value="Tek">
+            </div>
+          </div>
+
+          <!-- Özel Not -->
+          <div class="form-group">
+            <label class="form-label">
+              <span>Özel Not / Açıklama</span>
+              <span class="form-label-hint">İsteğe Bağlı</span>
+            </label>
+            <input type="text" id="note" class="form-control" placeholder="Örn: 3. ders sınavım var, lütfen zımbalansın.">
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="btn-submit" style="margin-top: 10px;">
+            📤 Talebi Müdüre İlet
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 2. TALEPLERİM LİSTESİ BÖLÜMÜ -->
+    <div id="view-list" style="display:none;">
+      <div id="request-list-container">
+        <p style="text-align:center; color:#94a3b8; padding:30px;">Talepleriniz yükleniyor...</p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let currentUser = null;
+    const socket = io();
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      let icon = 'ℹ️';
+      if (type === 'success') icon = '✅';
+      else if (type === 'error') icon = '❌';
+      else if (type === 'bell') icon = '🎉';
+
+      toast.innerHTML = `<span style="font-size:1.3rem;">${icon}</span><span>${message}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        toast.style.transition = 'all 0.3s';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function selectKademe(kademe, el) {
+      document.querySelectorAll('.kademe-card-btn').forEach(btn => btn.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('kademe').value = kademe;
+    }
+
+    function selectSegment(fieldId, value, el) {
+      const group = el.parentElement;
+      group.querySelectorAll('.segmented-btn').forEach(btn => btn.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById(fieldId).value = value;
+    }
+
+    const fileInput = document.getElementById('file-input');
+    const dropzone = document.getElementById('dropzone');
+    const filePreview = document.getElementById('file-preview');
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        document.getElementById('file-name-preview').innerText = file.name;
+        document.getElementById('file-size-preview').innerText = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+        dropzone.style.display = 'none';
+        filePreview.style.display = 'flex';
+      }
+    });
+
+    function removeFile(e) {
+      e.stopPropagation();
+      fileInput.value = '';
+      dropzone.style.display = 'block';
+      filePreview.style.display = 'none';
+    }
+
+    ['dragenter', 'dragover'].forEach(name => {
+      dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(name => {
+      dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+    });
+    dropzone.addEventListener('drop', (e) => {
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        fileInput.dispatchEvent(new Event('change'));
+      }
+    });
+
+    async function checkAuth() {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      if (!data.loggedIn) {
+        window.location.href = '/index.html';
+        return;
+      }
+      currentUser = data.user;
+      document.getElementById('user-name').innerText = currentUser.name;
+      socket.emit('join_room', { role: currentUser.role, userId: currentUser.id });
+    }
+    checkAuth();
+
+    socket.on('status_updated', (data) => {
+      loadMyRequests();
+      if (data.status === 'tamamlandi') {
+        showToast('🎉 Çıktınız hazır! Bilgi işlem odasından teslim alabilirsiniz.', 'bell');
+      } else if (data.status === 'onaylandi') {
+        showToast('Talebiniz müdür tarafından onaylandı, fotokopi sırasına alındı.', 'success');
+      } else if (data.status === 'reddedildi') {
+        showToast('Talebiniz reddedildi: ' + (data.reason || ''), 'error');
+      }
+    });
+
+    function switchTab(tab) {
+      if (tab === 'new') {
+        document.getElementById('view-new').style.display = 'block';
+        document.getElementById('view-list').style.display = 'none';
+        document.getElementById('tab-new').classList.add('active');
+        document.getElementById('tab-list').classList.remove('active');
+      } else {
+        document.getElementById('view-new').style.display = 'none';
+        document.getElementById('view-list').style.display = 'block';
+        document.getElementById('tab-new').classList.remove('active');
+        document.getElementById('tab-list').classList.add('active');
+        loadMyRequests();
+      }
+    }
+
+    document.getElementById('print-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-submit');
+      if (!fileInput.files[0]) {
+        showToast('Lütfen yazdırılacak bir dosya seçin.', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'İletiliyor...';
+
+      const formData = new FormData();
+      formData.append('kademe', document.getElementById('kademe').value);
+      formData.append('file', fileInput.files[0]);
+      formData.append('copy_count', document.getElementById('copy_count').value);
+      formData.append('pages_per_sheet', document.getElementById('pages_per_sheet').value);
+      formData.append('color_mode', document.getElementById('color_mode').value);
+      formData.append('duplex_mode', document.getElementById('duplex_mode').value);
+      formData.append('paper_size', document.getElementById('paper_size').value);
+      formData.append('note', document.getElementById('note').value);
+
+      try {
+        const res = await fetch('/api/requests', { method: 'POST', body: formData });
+        const result = await res.json();
+
+        if (res.ok && result.success) {
+          showToast(result.message, 'success');
+          document.getElementById('print-form').reset();
+          removeFile(new Event('dummy'));
+          setTimeout(() => switchTab('list'), 1000);
+        } else {
+          showToast(result.error || 'Talep gönderilemedi.', 'error');
+        }
+      } catch (err) {
+        showToast('Bağlantı hatası!', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '📤 Talebi Müdüre İlet';
+      }
+    });
+
+    async function loadMyRequests() {
+      const container = document.getElementById('request-list-container');
+      try {
+        const res = await fetch('/api/requests/my');
+        const list = await res.json();
+
+        if (!list || list.length === 0) {
+          container.innerHTML = `
+            <div class="card" style="text-align:center; padding:40px 20px;">
+              <div style="font-size:2.5rem; margin-bottom:8px;">📭</div>
+              <h3 style="font-size:1.1rem; color:#334155;">Henüz Talebiniz Yok</h3>
+              <p style="color:#78716c; font-size:0.88rem; margin-top:4px;">Yeni talep sekmesinden ilk baskı isteğinizi iletebilirsiniz.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = list.map(item => {
+          let badgeHtml = '';
+          if (item.status === 'beklemede') badgeHtml = '<span class="badge badge-beklemede">⏳ Müdür Onayı Bekliyor</span>';
+          else if (item.status === 'onaylandi') badgeHtml = '<span class="badge badge-onaylandi">🖨️ Onaylandı (Sırada)</span>';
+          else if (item.status === 'tamamlandi') badgeHtml = '<span class="badge badge-tamamlandi">✅ Hazır / Teslim Alınabilir</span>';
+          else if (item.status === 'reddedildi') badgeHtml = `<span class="badge badge-reddedildi">❌ Reddedildi</span>`;
+
+          return `
+            <div class="req-card">
+              <div class="req-header">
+                <div class="req-filename">
+                  <span>📄</span>
+                  <span>${item.file_original_name}</span>
+                </div>
+                ${badgeHtml}
+              </div>
+
+              <div class="req-details-grid">
+                <span class="req-chip highlight">🏢 ${item.kademe}</span>
+                <span class="req-chip highlight">🔢 <b>${item.copy_count}</b> Kopya</span>
+                <span class="req-chip">${item.color_mode === 'SB' ? '⚪⚫ Siyah-Beyaz' : '🎨 Renkli'}</span>
+                <span class="req-chip">${item.duplex_mode === 'Tek' ? 'Tek Yön' : 'Arkalı-Önlü'}</span>
+                <span class="req-chip">Sayfada ${item.pages_per_sheet} Sayfa</span>
+                <span class="req-chip">${item.paper_size}</span>
+              </div>
+
+              ${item.note ? `<div class="req-note-box">💬 <i>Notunuz: "${item.note}"</i></div>` : ''}
+              ${item.status === 'reddedildi' && item.rejection_reason ? `<div class="req-note-box" style="border-left-color:#ef4444; background:#fef2f2; color:#991b1b;">⚠️ Red Gerekçesi: "${item.rejection_reason}"</div>` : ''}
+
+              <div style="font-size:0.78rem; color:#78716c; margin-top:12px; display:flex; justify-content:space-between;">
+                <span>Talep Saati: ${new Date(item.created_at).toLocaleString('tr-TR')}</span>
+                ${item.approved_by ? `<span>Onaylayan: ${item.approved_by}</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<p style="color:red; text-align:center;">Veriler yüklenemedi.</p>';
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/index.html';
+    }
+  </script>
+</body>
+</html>

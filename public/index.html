@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Okul Fotokopi Portalı</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+  <meta name="theme-color" content="#faf9f5">
+</head>
+<body style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:100vh; padding:20px 16px;">
+
+  <div class="container" style="width:100%; max-width:440px;">
+    
+    <!-- Logo & Başlık -->
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="width:68px; height:68px; background:#ffffff; border:1.5px solid var(--card-border); border-radius:20px; margin:0 auto 12px; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-soft);">
+        <span style="font-size:2.2rem;">🖨️</span>
+      </div>
+      <h1 style="font-size: 1.65rem; font-weight:800; color: #1e293b; letter-spacing:-0.02em;">Okul Fotokopi Portalı</h1>
+      <p style="color: #78716c; font-size: 0.92rem; margin-top:2px;">Baskı & Çıktı Talep Masası</p>
+    </div>
+
+    <!-- Giriş Türü Sekmeleri -->
+    <div class="tabs-pill" style="margin-bottom:16px;">
+      <button class="tab-pill-btn active" id="tab-teacher" onclick="switchLoginType('teacher')">
+        👩‍🏫 Öğretmen (Şifresiz)
+      </button>
+      <button class="tab-pill-btn" id="tab-admin" onclick="switchLoginType('admin')">
+        👔 İdare & Bilgi İşlem
+      </button>
+    </div>
+
+    <!-- 1. ÖĞRETMEN ŞİFRESİZ GİRİŞ KARTI -->
+    <div class="card" id="card-teacher" style="padding:28px 24px;">
+      <div id="teacher-error" style="display:none; background:var(--pastel-rose-bg); border:1px solid var(--pastel-rose-border); color:var(--pastel-rose-text); padding:12px; border-radius:10px; font-size:0.88rem; font-weight:600; margin-bottom:16px;"></div>
+
+      <form id="teacher-form">
+        <div class="form-group">
+          <label class="form-label">
+            <span>Adınız ve Soyadınız</span>
+            <span class="form-label-hint">Şifre gerekmez</span>
+          </label>
+          <input type="text" id="teacher-name" list="teachers-datalist" class="form-control" placeholder="Örn: Ahmet Yılmaz" required autocomplete="name">
+          <datalist id="teachers-datalist"></datalist>
+          <div style="font-size:0.78rem; color:#78716c; margin-top:6px;">
+            💡 İsminizi yazarak veya listeden seçerek doğrudan girebilirsiniz.
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="btn-teacher-login" style="margin-top: 8px;">
+          Giriş Yap & Baskı İste
+        </button>
+      </form>
+    </div>
+
+    <!-- 2. İDARE & BİLGİ İŞLEM ŞİFRELİ GİRİŞ KARTI -->
+    <div class="card" id="card-admin" style="display:none; padding:28px 24px;">
+      <div id="admin-error" style="display:none; background:var(--pastel-rose-bg); border:1px solid var(--pastel-rose-border); color:var(--pastel-rose-text); padding:12px; border-radius:10px; font-size:0.88rem; font-weight:600; margin-bottom:16px;"></div>
+
+      <form id="admin-form">
+        <div class="form-group">
+          <label class="form-label"><span>Kurumsal E-Posta</span></label>
+          <input type="email" id="admin-email" class="form-control" placeholder="mudur@okuladi.k12.tr" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label"><span>Şifre</span></label>
+          <input type="password" id="admin-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="btn-admin-login" style="margin-top: 8px;">
+          Yönetici Girişi
+        </button>
+      </form>
+    </div>
+
+    <div style="text-align:center; font-size:0.8rem; color:#a8a29e; margin-top:10px;">
+      🔒 Yalnızca okul ağı içerisinden erişilebilir.
+    </div>
+
+  </div>
+
+  <script>
+    // Oturum kontrolü
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.loggedIn) {
+          redirectByRole(data.user.role);
+        }
+      });
+
+    // Kayıtlı öğretmenleri datalist'e doldur
+    fetch('/api/auth/teachers')
+      .then(res => res.json())
+      .then(list => {
+        const datalist = document.getElementById('teachers-datalist');
+        if (Array.isArray(list)) {
+          datalist.innerHTML = list.map(t => `<option value="${t.name}">`).join('');
+        }
+      })
+      .catch(() => {});
+
+    function switchLoginType(type) {
+      if (type === 'teacher') {
+        document.getElementById('card-teacher').style.display = 'block';
+        document.getElementById('card-admin').style.display = 'none';
+        document.getElementById('tab-teacher').classList.add('active');
+        document.getElementById('tab-admin').classList.remove('active');
+      } else {
+        document.getElementById('card-teacher').style.display = 'none';
+        document.getElementById('card-admin').style.display = 'block';
+        document.getElementById('tab-teacher').classList.remove('active');
+        document.getElementById('tab-admin').classList.add('active');
+      }
+    }
+
+    function redirectByRole(role) {
+      if (role === 'ogretmen') window.location.href = '/ogretmen.html';
+      else if (role === 'mudur') window.location.href = '/mudur.html';
+      else if (role === 'bilgi_islem' || role === 'admin') window.location.href = '/bilgi-islem.html';
+    }
+
+    // 1. Öğretmen Şifresiz Giriş
+    document.getElementById('teacher-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('teacher-name').value;
+      const errorBox = document.getElementById('teacher-error');
+      const btn = document.getElementById('btn-teacher-login');
+
+      errorBox.style.display = 'none';
+      btn.innerText = 'Giriş Yapılıyor...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/auth/teacher-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          redirectByRole('ogretmen');
+        } else {
+          errorBox.innerText = data.error || 'Giriş yapılamadı.';
+          errorBox.style.display = 'block';
+        }
+      } catch (err) {
+        errorBox.innerText = 'Sunucuya bağlanılamadı!';
+        errorBox.style.display = 'block';
+      } finally {
+        btn.innerText = 'Giriş Yap & Baskı İste';
+        btn.disabled = false;
+      }
+    });
+
+    // 2. İdare & Bilgi İşlem Şifreli Giriş
+    document.getElementById('admin-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('admin-email').value;
+      const password = document.getElementById('admin-password').value;
+      const errorBox = document.getElementById('admin-error');
+      const btn = document.getElementById('btn-admin-login');
+
+      errorBox.style.display = 'none';
+      btn.innerText = 'Giriş Yapılıyor...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          redirectByRole(data.user.role);
+        } else {
+          errorBox.innerText = data.error || 'Geçersiz e-posta veya şifre!';
+          errorBox.style.display = 'block';
+        }
+      } catch (err) {
+        errorBox.innerText = 'Sunucuya bağlanılamadı!';
+        errorBox.style.display = 'block';
+      } finally {
+        btn.innerText = 'Yönetici Girişi';
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
